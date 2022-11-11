@@ -1,3 +1,12 @@
+"""
+distill.py
+
+Imitate the expert trajectories and distill to student datasets
+
+Learnable parameters:
+- synthetic data
+- learning rate
+"""
 import os
 import argparse
 import numpy as np
@@ -31,9 +40,9 @@ def main(args):
     args.dsa = True if args.dsa == 'True' else False
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    eval_it_pool = np.arange(0, args.Iteration + 1, args.eval_it).tolist()
+    eval_it_pool = np.arange(0, args.Iteration + 1, args.eval_it).tolist()  # evaluation iterations
     channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader, loader_train_dict, class_map, class_map_inv = get_dataset(args.dataset, args.data_path, args.batch_real, args.subset, args=args)
-    model_eval_pool = get_eval_pool(args.eval_mode, args.model, args.model)
+    model_eval_pool = get_eval_pool(args.eval_mode, args.model, args.model) # evaluation models, see utils.py
 
     im_res = im_size[0]
 
@@ -49,7 +58,7 @@ def main(args):
         # args.epoch_eval_train = 1000
         args.dc_aug_param = None
 
-    args.dsa_param = ParamDiffAug()
+    args.dsa_param = ParamDiffAug() # Data Augmentation Differentiable Mask
 
     dsa_params = args.dsa_param
     if args.zca:
@@ -115,7 +124,7 @@ def main(args):
     else:
         image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
 
-    syn_lr = torch.tensor(args.lr_teacher).to(args.device)
+    syn_lr = torch.tensor(args.lr_teacher).to(args.device)  # initialize as the teacher learning rate
 
     if args.pix_init == 'real':
         print('initialize synthetic data from random real images')
@@ -150,7 +159,7 @@ def main(args):
     expert_dir = os.path.join(expert_dir, args.model)
     print("Expert Dir: {}".format(expert_dir))
 
-    if args.load_all:
+    if args.load_all:   # load expert trajaectories
         buffer = []
         n = 0
         while os.path.exists(os.path.join(expert_dir, "replay_buffer_{}.pt".format(n))):
@@ -263,6 +272,7 @@ def main(args):
                         grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
                         wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
 
+                    ''' ZCA whitening '''
                     if args.zca:
                         image_save = image_save.to(args.device)
                         image_save = args.zca_trans.inverse_transform(image_save)
@@ -324,11 +334,14 @@ def main(args):
         start_epoch = np.random.randint(0, args.max_start_epoch)
         starting_params = expert_trajectory[start_epoch]
 
+        # Theta_{t+M}
         target_params = expert_trajectory[start_epoch+args.expert_epochs]
         target_params = torch.cat([p.data.to(args.device).reshape(-1) for p in target_params], 0)
 
+        # learnable student parameters
         student_params = [torch.cat([p.data.to(args.device).reshape(-1) for p in starting_params], 0).requires_grad_(True)]
 
+        # Theta_{t}
         starting_params = torch.cat([p.data.to(args.device).reshape(-1) for p in starting_params], 0)
 
         syn_images = image_syn

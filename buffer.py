@@ -1,3 +1,11 @@
+"""
+buffer.py
+Extracts the parameters of the ORIGINAL network at each epoch and saves them to a file.
+
+output: tensors files containing the parameters of the network at each epoch (expert trajectories)
+output file name: "expert_traj_{}.pt".format(epoch)
+"""
+
 import os
 import argparse
 import torch
@@ -12,7 +20,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def main(args):
 
-    args.dsa = True if args.dsa == 'True' else False
+    args.dsa = True if args.dsa == 'True' else False    # whether to use Siamese Data Augmentation Differentiable Mask
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     args.dsa_param = ParamDiffAug()
 
@@ -54,7 +62,7 @@ def main(args):
 
     criterion = nn.CrossEntropyLoss().to(args.device)
 
-    trajectories = []
+    trajectories = []   # Expert trajectories
 
     dst_train = TensorDataset(copy.deepcopy(images_all.detach()), copy.deepcopy(labels_all.detach()))
     trainloader = torch.utils.data.DataLoader(dst_train, batch_size=args.batch_train, shuffle=True, num_workers=0)
@@ -68,7 +76,7 @@ def main(args):
 
         ''' Train synthetic data '''
         teacher_net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
-        teacher_net.train()
+        teacher_net.train() # set the model to training mode
         lr = args.lr_teacher
         teacher_optim = torch.optim.SGD(teacher_net.parameters(), lr=lr, momentum=args.mom, weight_decay=args.l2)  # optimizer_img for synthetic data
         teacher_optim.zero_grad()
@@ -81,6 +89,8 @@ def main(args):
 
         for e in range(args.train_epochs):
 
+            # epoch() is a function defined in utils.py
+            # epoch() trains the model for one epoch
             train_loss, train_acc = epoch("train", dataloader=trainloader, net=teacher_net, optimizer=teacher_optim,
                                         criterion=criterion, args=args, aug=True)
 
@@ -89,6 +99,8 @@ def main(args):
 
             print("Itr: {}\tEpoch: {}\tTrain Acc: {}\tTest Acc: {}".format(it, e, train_acc, test_acc))
 
+            # save the parameters of the network at each epoch
+            # later add to trajectories
             timestamps.append([p.detach().cpu() for p in teacher_net.parameters()])
 
             if e in lr_schedule and args.decay:
@@ -96,6 +108,7 @@ def main(args):
                 teacher_optim = torch.optim.SGD(teacher_net.parameters(), lr=lr, momentum=args.mom, weight_decay=args.l2)
                 teacher_optim.zero_grad()
 
+        # expert trajectories
         trajectories.append(timestamps)
 
         if len(trajectories) == args.save_interval:
