@@ -12,7 +12,9 @@ import tqdm
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 from scipy.ndimage.interpolation import rotate as scipyrotate
-from networks import MLP, ConvNet, LeNet, AlexNet, VGG11BN, VGG11, ResNet18, ResNet18BN_AP, ResNet18_AP
+from networks import MLP, ConvNet, LeNet, AlexNet, VGG11BN, VGG11, VGG13, VGG16, ResNet18, ResNet18BN_AP, ResNet18_AP
+
+from extra_models import *
 
 class Config:
     imagenette = [0, 217, 482, 491, 497, 566, 569, 571, 574, 701]
@@ -205,6 +207,10 @@ def get_network(model, channel, num_classes, im_size=(32, 32), dist=True):
         net = AlexNet(channel=channel, num_classes=num_classes)
     elif model == 'VGG11':
         net = VGG11( channel=channel, num_classes=num_classes)
+    elif model == 'VGG13':
+        net = VGG13( channel=channel, num_classes=num_classes)
+    elif model == 'VGG16':
+        net = VGG16( channel=channel, num_classes=num_classes)
     elif model == 'VGG11BN':
         net = VGG11BN(channel=channel, num_classes=num_classes)
     elif model == 'ResNet18':
@@ -213,6 +219,10 @@ def get_network(model, channel, num_classes, im_size=(32, 32), dist=True):
         net = ResNet18BN_AP(channel=channel, num_classes=num_classes)
     elif model == 'ResNet18_AP':
         net = ResNet18_AP(channel=channel, num_classes=num_classes)
+    
+    # custome ResNet for CIFAR10
+    elif model == 'ResNet20_CIFAR':
+        net = ResNet20_CIFAR()
 
     elif model == 'ConvNetD1':
         net = ConvNet(channel=channel, num_classes=num_classes, net_width=net_width, net_depth=1, net_act=net_act, net_norm=net_norm, net_pooling=net_pooling, im_size=im_size)

@@ -24,6 +24,9 @@ from reparam_module import ReparamModule
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+# Train with one card only
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 def main(args):
 
     if args.zca and args.texture:
@@ -76,6 +79,10 @@ def main(args):
 
     for key in wandb.config._items:
         setattr(args, key, wandb.config._items[key])
+    
+    # set wandb name
+    wandb.run.name = args.wandb_name
+    wandb.run.save()
 
     args.dsa_param = dsa_params
     args.zca_trans = zca_trans
@@ -124,6 +131,7 @@ def main(args):
     else:
         image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
 
+    # learnable learning rate to update student network
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)  # initialize as the teacher learning rate
 
     if args.pix_init == 'real':
@@ -191,13 +199,14 @@ def main(args):
 
     best_std = {m: 0 for m in model_eval_pool}
 
+    # distillation step
     for it in range(0, args.Iteration+1):
         save_this_it = False
 
         # writer.add_scalar('Progress', it, it)
         wandb.log({"Progress": it}, step=it)
         ''' Evaluate synthetic data '''
-        if it in eval_it_pool:
+        if it in eval_it_pool:  # eval_it_pool = [1000, 2000, 3000, 4000, 5000]
             for model_eval in model_eval_pool:
                 print('-------------------------\nEvaluation\nmodel_train = %s, model_eval = %s, iteration = %d'%(args.model, model_eval, it))
                 if args.dsa:
@@ -208,6 +217,7 @@ def main(args):
 
                 accs_test = []
                 accs_train = []
+                #     --num_eval', type=int, default=5, help='how many networks to evaluate on'
                 for it_eval in range(args.num_eval):
                     net_eval = get_network(model_eval, channel, num_classes, im_size).to(args.device) # get a random model
 
@@ -235,6 +245,7 @@ def main(args):
                 wandb.log({'Max_Std/{}'.format(model_eval): best_std[model_eval]}, step=it)
 
 
+        # save the results
         if it in eval_it_pool and (save_this_it or it % 1000 == 0):
             with torch.no_grad():
                 image_save = image_syn.cuda()
@@ -298,6 +309,7 @@ def main(args):
                             grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
                             wandb.log({"Clipped_Reconstructed_Images/std_{}".format(clip_val): wandb.Image(
                                 torch.nan_to_num(grid.detach().cpu()))}, step=it)
+        """ End of evaluation """
 
         wandb.log({"Synthetic_LR": syn_lr.detach().cpu()}, step=it)
 
@@ -354,6 +366,7 @@ def main(args):
 
         for step in range(args.syn_steps):
 
+            # sample a batch of images
             if not indices_chunks:
                 indices = torch.randperm(len(syn_images))
                 indices_chunks = list(torch.split(indices, args.batch_syn))
@@ -375,6 +388,7 @@ def main(args):
                 forward_params = student_params[-1].unsqueeze(0).expand(torch.cuda.device_count(), -1)
             else:
                 forward_params = student_params[-1]
+            # update student network w.r.t. classification loss
             x = student_net(x, flat_param=forward_params)
             ce_loss = criterion(x, this_y)
 
@@ -483,6 +497,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--force_save', action='store_true', help='this will save images for 50ipc')
 
+    parser.add_argument('--wandb_name', type=str, default=None, help='name for wandb run')
     args = parser.parse_args()
 
     main(args)

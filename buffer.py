@@ -18,6 +18,9 @@ import copy
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+# Train with one card only
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 def main(args):
 
     args.dsa = True if args.dsa == 'True' else False    # whether to use Siamese Data Augmentation Differentiable Mask
